@@ -230,6 +230,21 @@ func TestBuildInputPackagePolicy(t *testing.T) {
 			goldenLegacy:     "testdata/log_custom_logs_legacy.json",
 		},
 		{
+			// Override data_stream.type from the default "logs" to "metrics".
+			// Mirrors the Kibana Fleet feature (PR #214216) for input packages.
+			name:               "log_custom_logs_metrics_type",
+			packageRoot:        "testdata/packages/log_input",
+			policyTemplateName: "logs",
+			policyName:         "log-logs-test",
+			varValues: common.MapStr{
+				"paths":               []string{"/tmp/test.log"},
+				"data_stream.dataset": "log.custom",
+				"data_stream.type":    "metrics",
+			},
+			goldenSimplified: "testdata/log_custom_logs_metrics_type.json",
+			goldenLegacy:     "testdata/log_custom_logs_metrics_type_legacy.json",
+		},
+		{
 			name:               "sql_input_custom_dataset",
 			packageRoot:        "../../test/packages/parallel/sql_input",
 			policyTemplateName: "sql_query",
@@ -281,6 +296,15 @@ func TestBuildInputPackagePolicy(t *testing.T) {
 			},
 			goldenSimplified: "testdata/otel_traces_use_apm.json",
 			goldenLegacy:     "testdata/otel_traces_use_apm_legacy.json",
+		},
+		{
+			name:               "otel_dynamic_signal_types_default_dataset",
+			packageRoot:        "testdata/packages/otel_dynamic_input",
+			policyTemplateName: "sqlreceiver",
+			policyName:         "otel-dynamic-test",
+			varValues:          common.MapStr{},
+			goldenSimplified:   "testdata/otel_input_dynamic_signals.json",
+			goldenLegacy:       "testdata/otel_input_dynamic_signals_legacy.json",
 		},
 		{
 			// Package-level variable: the user overrides the default package-level
@@ -514,6 +538,13 @@ func TestEnsureDatasetVar(t *testing.T) {
 			policyTemplate: packages.PolicyTemplate{Name: "sql_query"},
 			varValues:      common.MapStr{},
 			wantDataset:    "sql_query",
+		},
+		{
+			name:           "dynamic_signal_types falls back to policy template name",
+			vars:           Vars{},
+			policyTemplate: packages.PolicyTemplate{Name: "sqlreceiver", DynamicSignalTypes: true},
+			varValues:      common.MapStr{},
+			wantDataset:    "sqlreceiver",
 		},
 	}
 

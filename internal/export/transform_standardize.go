@@ -5,6 +5,7 @@
 package export
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -24,14 +25,11 @@ func standardizeObjectID(ctx *transformationContext, object common.MapStr) (comm
 
 	// Adjust references
 	references, err := object.GetValue("references")
-	if err != nil && err != common.ErrKeyNotFound {
+	if err != nil && !errors.Is(err, common.ErrKeyNotFound) {
 		return nil, fmt.Errorf("retrieving object references failed: %w", err)
 	}
 
-	newReferences, err := adjustObjectReferences(ctx, references.([]interface{}))
-	if err != nil {
-		return nil, fmt.Errorf("can't adjust object references (ID: %s): %w", id, err)
-	}
+	newReferences := adjustObjectReferences(ctx, references.([]interface{}))
 
 	_, err = object.Put("references", newReferences)
 	if err != nil {
@@ -40,7 +38,7 @@ func standardizeObjectID(ctx *transformationContext, object common.MapStr) (comm
 	return object, nil
 }
 
-func adjustObjectReferences(ctx *transformationContext, references []interface{}) ([]interface{}, error) {
+func adjustObjectReferences(ctx *transformationContext, references []interface{}) []interface{} {
 	for i, r := range references {
 		reference := r.(map[string]interface{})
 		if aType, ok := reference["type"]; ok && aType == "index-pattern" {
@@ -53,7 +51,7 @@ func adjustObjectReferences(ctx *transformationContext, references []interface{}
 			references[i] = reference
 		}
 	}
-	return references, nil
+	return references
 }
 
 func standardizeObjectProperties(ctx *transformationContext, object common.MapStr) (common.MapStr, error) {

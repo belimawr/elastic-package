@@ -18,6 +18,7 @@ import (
 	"github.com/elastic/elastic-package/internal/files"
 	"github.com/elastic/elastic-package/internal/logger"
 	"github.com/elastic/elastic-package/internal/packages"
+	"github.com/elastic/elastic-package/internal/requiredinputs"
 	"github.com/elastic/elastic-package/internal/validation"
 )
 
@@ -31,11 +32,12 @@ type BuildOptions struct {
 	BuildDir       string // directory where all the built packages are placed and zipped packages are stored
 	RepositoryRoot *os.Root
 
-	CreateZip      bool
-	SignPackage    bool
-	SkipValidation bool
-	UpdateReadmes  bool
-	SchemaURLs     fields.SchemaURLs
+	CreateZip              bool
+	SignPackage            bool
+	SkipValidation         bool
+	UpdateReadmes          bool
+	SchemaURLs             fields.SchemaURLs
+	RequiredInputsResolver requiredinputs.Resolver
 }
 
 // BuildDirectory function locates the target build directory. If the directory doesn't exist, it will create it.
@@ -92,7 +94,7 @@ func BuildPackagesDirectory(packageRoot string, buildDir string) (string, error)
 			return "", fmt.Errorf("can't check build directory: %w", err)
 		}
 		if !info.IsDir() {
-			return "", fmt.Errorf("build path (%s) expected to be a directory", err)
+			return "", fmt.Errorf("build path (%s) expected to be a directory", buildDir)
 		}
 		d := filepath.Join(buildDir, builtPackagesDir)
 		err = os.MkdirAll(d, 0755)
@@ -106,6 +108,20 @@ func BuildPackagesDirectory(packageRoot string, buildDir string) (string, error)
 		return "", fmt.Errorf("reading package manifest failed (path: %s): %w", packageRoot, err)
 	}
 	return filepath.Join(buildDir, m.Name, m.Version), nil
+}
+
+// ReadBuiltPackageManifest locates the built package directory for packageRoot
+// and reads its manifest. Returns the built root path and parsed manifest.
+func ReadBuiltPackageManifest(packageRoot string) (string, *packages.PackageManifest, error) {
+	builtRoot, err := BuildPackagesDirectory(packageRoot, "")
+	if err != nil {
+		return "", nil, err
+	}
+	builtPkg, err := packages.ReadPackageManifestFromPackageRoot(builtRoot)
+	if err != nil {
+		return "", nil, err
+	}
+	return builtRoot, builtPkg, nil
 }
 
 // buildPackagesZipPath function returns the path to zipped built package.
@@ -230,6 +246,13 @@ func BuildPackage(options BuildOptions) (string, error) {
 	err = resolveTransformDefinitions(buildPackageRoot)
 	if err != nil {
 		return "", fmt.Errorf("resolving transform manifests failed: %w", err)
+	}
+
+	if options.RequiredInputsResolver != nil {
+		err = options.RequiredInputsResolver.Bundle(buildPackageRoot)
+		if err != nil {
+			return "", fmt.Errorf("bundling input package templates failed: %w", err)
+		}
 	}
 
 	if options.UpdateReadmes {

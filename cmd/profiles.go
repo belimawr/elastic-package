@@ -158,7 +158,7 @@ User profiles can be configured with a "config.yml" file in the profile director
 
 			_, err := profile.LoadProfile(profileName)
 			if err != nil {
-				return fmt.Errorf("cannot use profile %q: %v", profileName, err)
+				return fmt.Errorf("cannot use profile %q: %w", profileName, err)
 			}
 
 			location, err := locations.NewLocationManager()
@@ -212,9 +212,12 @@ func formatTable(profilesDir string, profileList []profile.Metadata, currentProf
 	var profilesTable = profileToList(profilesDir, profileList, currentProfile)
 
 	table.Header([]string{"Name", "Date Created", "Version", "Path"})
-	table.Bulk(profilesTable)
-	table.Render()
-
+	if err := table.Bulk(profilesTable); err != nil {
+		return fmt.Errorf("populating profiles table: %w", err)
+	}
+	if err := table.Render(); err != nil {
+		return fmt.Errorf("rendering profiles table: %w", err)
+	}
 	return nil
 }
 

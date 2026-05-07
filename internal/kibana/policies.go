@@ -261,7 +261,7 @@ func SetKibanaVariables(definitions []packages.Variable, values common.MapStr) V
 		switch {
 		case err == nil:
 			var val packages.VarValue
-			val.Unpack(rawValue)
+			val.MustUnpack(rawValue)
 			vars[def.Name] = Var{Type: def.Type, Value: val, fromUser: true}
 		case def.Default != nil:
 			// Fallback to default if available.
@@ -269,7 +269,7 @@ func SetKibanaVariables(definitions []packages.Variable, values common.MapStr) V
 		case def.Multi:
 			// Multi-valued var with no value and no default: keep for legacy.
 			var val packages.VarValue
-			val.Unpack([]interface{}{})
+			val.MustUnpack([]interface{}{})
 			vars[def.Name] = Var{Type: def.Type, Value: val}
 		}
 	}
@@ -307,6 +307,9 @@ type PackagePolicyInput struct {
 	Streams map[string]PackagePolicyStream `json:"streams,omitempty"`
 
 	// Unexported fields carry metadata used only for legacy API conversion.
+	// inputType is the Elastic Agent / Fleet input type from the package manifest
+	// (e.g. logfile, httpjson, otelcol), not the policy-template or data_stream type
+	// (e.g. logs, metrics, traces).
 	inputType      string
 	policyTemplate string
 	legacyVars     Vars

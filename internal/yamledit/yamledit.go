@@ -97,7 +97,7 @@ func (d *Document) Parse(v any) error {
 
 	// Set the Document field on v, if v is a pointer to a struct and the field
 	// on the struct is exported.
-	if rv := reflect.ValueOf(v); rv.Kind() == reflect.Ptr {
+	if rv := reflect.ValueOf(v); rv.Kind() == reflect.Pointer {
 		if structValue := rv.Elem(); structValue.Kind() == reflect.Struct {
 			for i := 0; i < structValue.NumField(); i++ {
 				if field := structValue.Field(i); field.CanAddr() && field.CanSet() {
@@ -191,7 +191,7 @@ func (d *Document) DeleteNode(path string) (bool, error) {
 		return false, errors.New("cannot delete root node")
 	}
 
-	switch parentNode.Type() {
+	switch parentNode.Type() { //nolint:exhaustive // all non-container node types are handled by default
 	case ast.MappingType:
 		mn := parentNode.(*ast.MappingNode)
 		for i, kv := range mn.Values {

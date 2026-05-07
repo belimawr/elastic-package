@@ -1,52 +1,25 @@
 {
-    "@timestamp": "2026-03-23T18:57:30.184Z",
+    "@timestamp": 1771937728521,
     "_metric_names_hash": "8986448896debcf6",
+    "attributes": {},
     "data_stream": {
         "dataset": "sqlserverreceiver.otel",
-        "namespace": "25898",
+        "namespace": "58123",
         "type": "metrics"
     },
     "event": {
         "agent_id_status": "missing",
-        "dataset": "sqlserverreceiver.otel",
-        "ingested": "2026-03-23T18:57:40Z"
-    },
-    "host": {
-        "name": "elastic-agent-58948",
-        "os": {
-            "platform": "linux"
-        }
+        "ingested": "2026-02-24T12:55:38Z"
     },
     "metrics": {
-        "sqlserver": {
-            "batch": {
-                "request": {
-                    "rate": 64
-                }
-            },
-            "lock": {
-                "wait": {
-                    "rate": 3
-                }
-            }
-        }
-    },
-    "os": {
-        "type": "linux"
+        "sqlserver.batch.request.rate": 64,
+        "sqlserver.lock.wait.rate": 5
     },
     "resource": {
         "attributes": {
-            "host": {
-                "name": "elastic-agent-58948"
-            },
-            "os": {
-                "type": "linux"
-            },
-            "service": {
-                "instance": {
-                    "id": "svc-sql_server_input_otel:1433"
-                }
-            }
+            "host.name": "elastic-agent-37707",
+            "os.type": "linux",
+            "service.instance.id": "svc-sql_server_input_otel:1433"
         },
         "schema_url": "https://opentelemetry.io/schemas/1.38.0"
     },
@@ -54,26 +27,6 @@
         "name": "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sqlserverreceiver",
         "version": "9.4.0"
     },
-    "service": {
-        "instance": {
-            "id": "svc-sql_server_input_otel:1433"
-        },
-        "node": {
-            "name": "svc-sql_server_input_otel:1433"
-        }
-    },
-    "sqlserver": {
-        "batch": {
-            "request": {
-                "rate": 64
-            }
-        },
-        "lock": {
-            "wait": {
-                "rate": 3
-            }
-        }
-    },
-    "start_timestamp": "2026-03-23T18:57:29.073Z",
+    "start_timestamp": 1771937727340,
     "unit": "{requests}/s"
 }

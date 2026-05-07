@@ -48,17 +48,20 @@ func BuildIntegrationPackagePolicy(
 	inputs := make(map[string]PackagePolicyInput)
 	for _, pt := range manifest.PolicyTemplates {
 		for _, input := range pt.Inputs {
-			inputKey := fmt.Sprintf("%s-%s", pt.Name, input.Type)
-			if input.Type == streamInput && pt.Name == policyTemplate.Name {
+			// effectiveName is the identifier used in data stream manifests: the Name qualifier
+			// when set (disambiguated same-type inputs), otherwise the Type.
+			effectiveName := effectiveInputName(input)
+			inputKey := fmt.Sprintf("%s-%s", pt.Name, effectiveName)
+			if effectiveName == streamInput && pt.Name == policyTemplate.Name {
 				// The target input: enabled with user-provided vars.
 				streams := buildStreamsForInput(streamInput, manifest, dsManifest, enabled, dsVars, datastreams)
 				inputEntry := PackagePolicyInput{
 					Enabled:        enabled,
 					Streams:        streams,
-					inputType:      streamInput,
+					inputType:      input.Type, // Fleet agent input type (e.g. logfile, otelcol), not name qualifier or data_stream type (logs/metrics/traces).
 					policyTemplate: pt.Name,
 				}
-				if foundInput := policyTemplate.FindInputByType(streamInput); foundInput != nil {
+				if foundInput := policyTemplate.FindInput(streamInput); foundInput != nil {
 					iv := SetKibanaVariables(foundInput.Vars, allInputVars)
 					inputEntry.Vars = iv.ToMapStr()
 					inputEntry.legacyVars = iv
@@ -69,7 +72,7 @@ func BuildIntegrationPackagePolicy(
 				// so that sibling stream keys are correct even when multiple policy
 				// templates declare different data_streams lists.
 				ptDatastreams := packages.FilterDatastreamsForPolicyTemplate(allDatastreams, pt)
-				streams := buildStreamsForInput(input.Type, manifest, packages.DataStreamManifest{}, false, common.MapStr{}, ptDatastreams)
+				streams := buildStreamsForInput(effectiveName, manifest, packages.DataStreamManifest{}, false, common.MapStr{}, ptDatastreams)
 				entry := PackagePolicyInput{
 					Enabled:        false,
 					inputType:      input.Type,
@@ -165,8 +168,17 @@ func BuildInputPackagePolicy(
 
 	vars := SetKibanaVariables(policyTemplate.Vars, varValues)
 	ensureDatasetVar(vars, policyTemplate, varValues)
+	ensureDataStreamTypeVar(vars, varValues)
+	// For otelcol, data_stream.dataset is the base name only (do not include a ".otel" suffix).
+	// Elastic Agent appends ".otel" at ingest; Fleet and this builder do not.
 	if policyTemplate.Input == "otelcol" {
 		ensureUseAPMVar(vars, varValues)
+	}
+	dsType := policyTemplate.Type
+	if v, found := vars["data_stream.type"]; found && v.fromUser {
+		if s, ok := v.Value.Value().(string); ok && s != "" {
+			dsType = s
+		}
 	}
 	inputEntry := PackagePolicyInput{
 		Enabled: enabled,
@@ -176,9 +188,7 @@ func BuildInputPackagePolicy(
 				Vars:              vars.ToMapStr(),
 				legacyVars:        vars,
 				dataStreamDataset: streamDataset,
-				// dataStreamType is intentionally empty: input packages
-				// require Kibana >= 7.16 (simplified API), so legacy
-				// conversion is not needed.
+				dataStreamType:    dsType,
 			},
 		},
 		inputType:      streamInput,
@@ -221,6 +231,9 @@ func datasetKey(pkgName string, ds packages.DataStreamManifest) string {
 //  2. manifest default already parsed into vars — promoted to fromUser=true
 //  3. explicit default in the policy-template var definitions
 //  4. policy template name as a final fallback
+//
+// For policy templates whose input is otelcol, callers should treat the stored value as the
+// base dataset (see BuildInputPackagePolicy); the ".otel" routing suffix is applied by Elastic Agent.
 func ensureDatasetVar(vars Vars, policyTemplate packages.PolicyTemplate, varValues common.MapStr) {
 	if raw, err := varValues.GetValue("data_stream.dataset"); err == nil {
 		var val packages.VarValue
@@ -244,7 +257,7 @@ func ensureDatasetVar(vars Vars, policyTemplate packages.PolicyTemplate, varValu
 		}
 	}
 	var value packages.VarValue
-	value.Unpack(dataset)
+	value.MustUnpack(dataset)
 	setVarFromUser(vars, "data_stream.dataset", "text", value)
 }
 
@@ -259,19 +272,36 @@ func ensureUseAPMVar(vars Vars, varValues common.MapStr) {
 	var val packages.VarValue
 	switch v := raw.(type) {
 	case bool:
-		val.Unpack(v)
+		val.MustUnpack(v)
 	case string:
 		b, err := strconv.ParseBool(v)
 		if err != nil {
 			return
 		}
-		val.Unpack(b)
+		val.MustUnpack(b)
 	default:
 		return
 	}
 	if val.Value() != nil {
 		setVarFromUser(vars, "use_apm", "boolean", val)
 	}
+}
+
+// ensureDataStreamTypeVar injects data_stream.type into vars with fromUser=true so
+// that the simplified API includes it, overriding the default from policy_template.type.
+// Only applies when the user explicitly provides a value in varValues; when absent,
+// Fleet uses policy_template.type as the default (no injection needed).
+// This mirrors the override introduced in Kibana PR #214216 for input packages.
+func ensureDataStreamTypeVar(vars Vars, varValues common.MapStr) {
+	raw, err := varValues.GetValue("data_stream.type")
+	if err != nil {
+		return
+	}
+	var val packages.VarValue
+	if err := val.Unpack(raw); err != nil {
+		return
+	}
+	setVarFromUser(vars, "data_stream.type", "text", val)
 }
 
 // setVarFromUser sets vars[name] with fromUser=true so that the variable is included
@@ -282,4 +312,14 @@ func setVarFromUser(vars Vars, name, varType string, val packages.VarValue) {
 		return
 	}
 	vars[name] = Var{Type: varType, Value: val, fromUser: true}
+}
+
+// effectiveInputName returns the identifier used to reference an input from data stream
+// manifests: the Name qualifier when set (for inputs disambiguated by name), or
+// the Type when no qualifier is present.
+func effectiveInputName(input packages.Input) string {
+	if input.Name != "" {
+		return input.Name
+	}
+	return input.Type
 }
